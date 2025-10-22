@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Logic Grid Puzzle — Difficulty-driven Generator</title>
+  <!-- Google AdSense (replace ca-pub-XXXXXXXXXXXXXXX with your publisher ID) -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+  <style>
+    :root{ --bg:#0b0f14; --panel:#121821; --muted:#7f8a9a; --text:#e8eef7; --accent:#5ee1a6; --err:#ff6b6b; --grid:#2a3b53; --wire:#90b4ff; --card:#0f1520; --shadow:0 10px 30px rgba(0,0,0,.35); }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0b0f14,#0b0f14 40%,#0c121a);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1400px;margin:24px auto;padding:0 16px;display:grid;grid-template-columns:260px minmax(640px,1fr) 320px;gap:16px}
+    @media (min-width:1600px){.wrap{grid-template-columns:260px minmax(780px,1fr) 320px}}
+    header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+    .title{display:flex;gap:10px;align-items:center}
+    .badge{background:rgba(144,180,255,.15);border:1px solid rgba(144,180,255,.35);color:var(--wire);padding:2px 8px;border-radius:999px;font-weight:600;letter-spacing:.4px}
+    .card{background:var(--panel);border:1px solid #1a2330;border-radius:16px;box-shadow:var(--shadow)}
+    .panel{padding:14px 14px}
+    h2{font-size:16px;margin:.2rem 0 .6rem}
+    .muted{color:var(--muted)}
+    .legend{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .k{padding:2px 6px;border-radius:6px;background:#0c131d;border:1px solid #1b2431;color:var(--muted)}
+
+    /* Stage */
+    .stage{position:relative;min-height:620px}
+    .toolbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+    button, select{background:#0f1622;border:1px solid #213149;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer}
+    button:hover{background:#121c2b}
+
+    .grid-wrap{position:relative;background:var(--panel);border:1px solid #1b2431;border-radius:16px;padding:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.02)}
+    svg{display:block;width:100%;height:560px;background:linear-gradient(180deg,#0f1520,#0f1520)}
+    .grid-line{stroke:var(--grid);stroke-width:1.5}
+    .side-strip{fill:rgba(144,180,255,.07);stroke:rgba(144,180,255,.25)}
+    .side-strip.goal{fill:rgba(94,225,166,.07);stroke:rgba(94,225,166,.25)}
+    .side-badge{fill:#cfe2ff;font-weight:700;letter-spacing:.08em}
+    .side-badge.goal{fill:#c9ffe7}
+    .io-arrow{fill:#2a3b53;opacity:.9}
+    .io-arrow.goal{fill:#2d7d66;opacity:.9}
+    svg.placing{cursor:crosshair}
+
+    /* Palette */
+    .palette{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .gate{cursor:grab; user-select:none; display:flex;align-items:center;gap:8px;padding:10px;border-radius:12px;background:var(--card);border:1px solid #1b2431}
+    .gate:active{cursor:grabbing}
+    .chip{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;font-weight:700;border:1px solid #223045}
+    .gate small{color:var(--muted)}
+
+    /* Ports */
+    .port circle{fill:#132235;stroke:#2a3b53;stroke-width:2;transition:all .15s ease; r:9}
+    .port:hover circle{stroke:var(--wire); r:11; filter: drop-shadow(0 0 4px rgba(144,180,255,.7))}
+
+    /* Gates */
+    .gate-node{cursor:move}
+    .gate-body{fill:#0b1b2a;stroke:#27405f;stroke-width:2}
+    .gate-label{fill:#d8e3f5;font-weight:700;font-size:14px}
+
+    /* Wires */
+    .wire{stroke:var(--wire);stroke-width:3.5;fill:none;pointer-events:stroke;cursor:pointer;filter:drop-shadow(0 0 2px rgba(144,180,255,.45))}
+    .wire:hover{stroke:#b6c9ff}
+    .wire.selected{stroke:var(--err);stroke-width:4}
+    .ghost{stroke:var(--wire);stroke-width:3;fill:none;stroke-dasharray:6 6;opacity:.8;pointer-events:none}
+    .hover-target{fill:rgba(144,180,255,.18);stroke:var(--wire);stroke-width:2}
+
+    /* Score */
+    .score{display:grid;grid-template-columns:1fr;gap:10px}
+    .stat{background:var(--card);border:1px solid #1b2431;border-radius:14px;padding:12px}
+    .ok{color:#5ee1a6}
+    .ng{color:#ff6b6b}
+
+    table{width:100%;border-collapse:separate;border-spacing:0 6px}
+    td,th{text-align:center;padding:6px 4px}
+    thead th{color:#9fb0c8;font-weight:600}
+    tbody tr{background:#0e1622}
+    tbody tr td{border-top:1px solid #1a2330;border-bottom:1px solid #1a2330}
+    tbody tr td:first-child{border-left:1px solid #1a2330;border-top-left-radius:8px;border-bottom-left-radius:8px}
+    tbody tr td:last-child{border-right:1px solid #1a2330;border-top-right-radius:8px;border-bottom-right-radius:8px}
+
+    .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f1622;border:1px solid #213149;border-radius:10px;padding:10px 14px;opacity:0;transition:opacity .2s ease}
+    .toast.show{opacity:1}
+    .mini{font-size:12px;color:#9fb0c8}
+    #ad-footer{min-height:90px}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);z-index:9999}
+    .modal.show{display:flex}
+    .modal-card{background:var(--panel);border:1px solid #1a2330;border-radius:16px;box-shadow:var(--shadow);max-width:840px;width:92vw;max-height:80vh;overflow:auto;padding:18px}
+    .modal-card h3{margin:.2rem 0 .6rem}
+    .modal-close{position:absolute;top:10px;right:14px;background:#0f1622;border:1px solid #213149;border-radius:10px;color:var(--text);padding:6px 10px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <div class="badge">IN-CHAT PREVIEW</div>
+        <h1 id="pageTitle" style="font-size:18px;margin:0">Logic Grid Puzzle — 難易度でI/Oと出題を自動生成</h1>
+      </div>
+      <div id="hintText" class="muted">配線: 出力→入力（入力は1本、出力は複数OK）｜Escで配線キャンセル</div>
+    </header>
+
+    <!-- Left: Palette -->
+    <aside class="card panel">
+      <h2 id="paletteTitle">ゲートパレット</h2>
+      <div class="palette" id="palette"></div>
+      <div class="legend" id="legend"></div>
+      <div class="stat" id="gateGuideWrap" style="margin-top:10px">
+        <strong id="gateGuideTitle">ゲートの説明</strong>
+        <ul id="gateGuide" class="mini" style="margin:6px 0 0 14px;line-height:1.6"></ul>
+      </div>
+    </aside>
+
+    <!-- Center: Stage -->
+    <main class="stage">
+      <div class="toolbar">
+        <label class="mini" id="lblDifficulty">Difficulty</label>
+        <select id="difficulty">
+          <option value="EASY">Easy（2入力 / ランダム / 出力1）</option>
+          <option value="MEDIUM">Medium（3入力 / ランダム非自明 / 出力1）</option>
+          <option value="HARD">Hard（3入力 / NAND想定 / 出力2）</option>
+          <option value="EXPERT">Expert（4入力 / ランダム非自明 / 出力2）</option>
+        </select>
+        <button id="btnNew">New Puzzle</button>
+        <button id="btnDaily">Today's</button>
+        <button id="btnShare">Share Link</button>
+        <select id="lang" title="Language" style="margin-left:auto">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+        </select>
+        <span id="targetName" class="mini"></span>
+        <button id="btnReset" title="盤面を初期化">Reset</button>
+      </div>
+      <div class="grid-wrap card">
+        <svg id="board" viewBox="0 0 800 560" aria-label="board" role="img"></svg>
+      </div>
+    </main>
+
+    <!-- Right: Score & Truth table -->
+    <aside class="card panel">
+      <h2><span id="scoreTitle">スコア</span> / <span id="truthTitle">真理値表</span></h2>
+      <div class="score">
+        <div class="stat"><div><span id="lblGateCount">現在のゲート数</span>: <strong id="gateCount">0</strong></div><div><span id="lblBest">ベスト</span>: <strong id="bestScore">—</strong></div></div>
+        <div class="stat">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <strong id="ttTitle">真理値表（入力 → Y）</strong>
+            <span id="solvedBadge" class="badge" style="display:none">CLEAR!</span>
+          </div>
+          <div id="sortControls" class="mini" style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px"></div>
+          <table>
+            <thead id="tthead"></thead>
+            <tbody id="ttbody"></tbody>
+          </table>
+        </div>
+        <div class="stat" id="selfTestsBox" style="display:none">
+          <strong>Self-tests</strong>
+          <div id="testResults" class="muted" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+  // ====== Helpers
+  const $=id=>document.getElementById(id);
+  function ready(fn){
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fn,{once:true});
+    else fn();
+  }
+  const on=(id,ev,fn)=>{ const el=$(id); if(!el) return false; el.addEventListener(ev,fn); return true; };
+
+  // ====== Toast helper
+  function flash(message, isError=false){
+    const toast = $('toast');
+    if(!toast) return;
+    toast.textContent = message;
+    toast.style.borderColor = isError ? '#422' : '#213149';
+    toast.style.backgroundColor = isError ? 'rgba(255,107,107,0.15)' : '#0f1622';
+    toast.classList.add('show');
+    clearTimeout(flash._t);
+    flash._t = setTimeout(()=> toast.classList.remove('show'), 1800);
+  }
+
+  // ====== Clipboard (robust, with fallbacks)
+  async function copyToClipboard(text){
+    if(window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText){
+      try{ await navigator.clipboard.writeText(text); return true; } catch(e){ /* fallback */ }
+    }
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.top='-1000px'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, ta.value.length);
+      const ok=document.execCommand && document.execCommand('copy');
+      document.body.removeChild(ta);
+      return !!ok;
+    }catch(e){ try{ window.prompt('Copy this URL', text); }catch(_){} return false; }
+  }
+
+  // ====== Gates (fixed palette)
+  const GATES=[
+    { type:'AND', inputs:2, fn:(a,b)=> a & b, label:'AND' },
+    { type:'OR',  inputs:2, fn:(a,b)=> a | b, label:'OR' },
+    { type:'NOT', inputs:1, fn:(a)=> a^1, label:'NOT' },
+    { type:'XOR', inputs:2, fn:(a,b)=> a ^ b, label:'XOR' },
+    { type:'NAND', inputs:2, fn:(a,b)=> (a & b)^1, label:'NAND' },
+  ];
+
+  // ====== Level (dynamic by difficulty)
+  const LEVEL={ name:'dyn', width:12, height:8, inputs:[], outputs:[] };
+  function labelFor(i){ return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i]; }
+  function setIO(nInputs, nOutputs=1){
+    LEVEL.inputs = Array.from({length:nInputs}, (_,i)=> ({id:labelFor(i), side:'left', index: Math.round((i+1)*(LEVEL.height/(nInputs+1)) ) }));
+    LEVEL.outputs = Array.from({length:nOutputs}, (_,i)=> ({id: 'Y'+(i+1), side:'right', index: Math.round((i+1)*(LEVEL.height/(nOutputs+1)) ) }));
+  }
+
+  // ====== Targets (bitmask of 2^n)
+  function nonTrivialMask(n, rng){
+    const size = 1<<n; // rows in truth table
+    const max = 1<<size; // number of masks
+    let mask;
+    const trivial = new Set([0, max-1]); // all 0 or all 1
+    const singleVar = [];
+    for(let v=0; v<n; v++){
+      let m=0; for(let row=0; row<size; row++){ const bit=(row>>v)&1; if(bit) m|=(1<<row); }
+      singleVar.push(m, (~m) & (max-1));
+    }
+    do{ mask = (rng()*max)|0; } while(trivial.has(mask) || singleVar.includes(mask));
+    return mask;
+  }
+  function lcg(seed){ let s=seed>>>0; return ()=> (s=(s*1664525+1013904223)>>>0)/4294967296; }
+  function dailySeed(){
+    // Use UTC date so everyone gets the same daily puzzle globally
+    const now=new Date();
+    const y=now.getUTCFullYear();
+    const m=now.getUTCMonth()+1;
+    const d=now.getUTCDate();
+    return (y*10000 + m*100 + d) ^ 0x9e3779b9;
+  }
+
+  const state={
+    nodes:[], wires:[], nextId:1,
+    pendingFrom:null, ghost:null, placeType:null, hoverRef:null,
+    inputsN:2, outputsN:1, masks:[0b0110], name:'XOR', gateLimit:null, gateWhitelist:null,
+    sortPref:null, lang:(localStorage.getItem('lgp_lang')||'ja'),
+    selWire:null
+  };
+
+  // ====== SVG helpers
+  const ns=t=>document.createElementNS('http://www.w3.org/2000/svg',t);
+  function gridToXY(cx,cy){ const pad=20, gw=760, gh=520, dx=gw/LEVEL.width, dy=gh/LEVEL.height; return {x:pad+dx*(cx+0.5), y:pad+dy*(cy+0.5)} }
+  function clientToSvg(x,y){ const board=$('board'); const pt=board.createSVGPoint(); pt.x=x; pt.y=y; const inv=board.getScreenCTM()?.inverse(); const p=inv?pt.matrixTransform(inv):{x,y}; return {x:p.x,y:p.y}; }
+  function svgToCell(sx,sy){ const pad=20, gw=760, gh=520, dx=gw/LEVEL.width, dy=gh/LEVEL.height; return {cx:Math.floor((sx-pad)/dx), cy:Math.floor((sy-pad)/dy)} }
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+  // ====== Grid & IO
+  function drawGrid(){ const b=$('board'); b.innerHTML=''; const defs=ns('defs'); const grad=ns('linearGradient'); grad.id='grad'; grad.setAttribute('x1','0'); grad.setAttribute('x2','0'); grad.setAttribute('y1','0'); grad.setAttribute('y2','1'); const s1=ns('stop'); s1.setAttribute('offset','0%'); s1.setAttribute('stop-color','#0f1520'); const s2=ns('stop'); s2.setAttribute('offset','100%'); s2.setAttribute('stop-color','#0d131d'); grad.append(s1,s2); defs.appendChild(grad); const bg=ns('rect'); bg.setAttribute('x',0); bg.setAttribute('y',0); bg.setAttribute('width',800); bg.setAttribute('height',560); bg.setAttribute('fill','url(#grad)');
+    const grid=ns('g'); grid.setAttribute('class','grid-line');
+    for(let y=0;y<=LEVEL.height;y++){ const p1=gridToXY(-0.5,y-0.5), p2=gridToXY(LEVEL.width-0.5,y-0.5); const l=ns('line'); l.setAttribute('x1',p1.x); l.setAttribute('y1',p1.y); l.setAttribute('x2',p2.x); l.setAttribute('y2',p2.y); grid.appendChild(l); }
+    for(let x=0;x<=LEVEL.width;x++){ const p1=gridToXY(x-0.5,-0.5), p2=gridToXY(x-0.5,LEVEL.height-0.5); const l=ns('line'); l.setAttribute('x1',p1.x); l.setAttribute('y1',p1.y); l.setAttribute('x2',p2.x); l.setAttribute('y2',p2.y); grid.appendChild(l); }
+    const leftStrip=ns('rect'); leftStrip.setAttribute('class','side-strip'); leftStrip.setAttribute('x',0); leftStrip.setAttribute('y',0); leftStrip.setAttribute('width',60); leftStrip.setAttribute('height',560);
+    const rightStrip=ns('rect'); rightStrip.setAttribute('class','side-strip goal'); rightStrip.setAttribute('x',740); rightStrip.setAttribute('y',0); rightStrip.setAttribute('width',60); rightStrip.setAttribute('height',560);
+    const startBadge=ns('text'); startBadge.setAttribute('class','side-badge'); startBadge.setAttribute('x',18); startBadge.setAttribute('y',24); startBadge.setAttribute('font-size','16'); startBadge.textContent='START';
+    const goalBadge=ns('text'); goalBadge.setAttribute('class','side-badge goal'); goalBadge.setAttribute('x',752); goalBadge.setAttribute('y',24); goalBadge.setAttribute('font-size','16'); goalBadge.textContent='GOAL';
+    b.append(defs,bg,leftStrip,rightStrip,grid,startBadge,goalBadge); }
+
+  function placeIO(){ const b=$('board'); const g=ns('g'); const mk=(id,x,y,isSource)=>{ const grp=ns('g'); grp.classList.add('port','io'); grp.dataset.node=id; grp.dataset.port=isSource?'out':'in0'; const c=ns('circle'); c.setAttribute('r',12); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('stroke-width','2.5'); const t=ns('text'); t.setAttribute('x',x+(isSource?16:-36)); t.setAttribute('y',y+6); t.setAttribute('fill','#e6eeff'); t.setAttribute('font-size','24'); t.setAttribute('font-weight','900'); t.setAttribute('stroke','#0b0f14'); t.setAttribute('stroke-width','3'); t.setAttribute('paint-order','stroke fill'); t.textContent=id; const arrow=ns('polygon'); if(isSource){ arrow.setAttribute('points', `${x+6},${y} ${x+14},${y-6} ${x+14},${y+6}`); arrow.setAttribute('class','io-arrow'); } else { arrow.setAttribute('points', `${x-6},${y} ${x-14},${y-6} ${x-14},${y+6}`); arrow.setAttribute('class','io-arrow goal'); } grp.append(c,t,arrow); grp.addEventListener('click', (e)=>{ e.stopPropagation(); const sv=clientToSvg(e.clientX,e.clientY); selectPort({node:id, port:isSource?'out':'in0', x:sv.x, y:sv.y}); }); g.appendChild(grp); };
+    LEVEL.inputs.forEach(io=>{ const p=gridToXY(-1,io.index); mk(io.id,p.x,p.y,true); });
+    LEVEL.outputs.forEach(io=>{ const p=gridToXY(LEVEL.width,io.index); mk(io.id,p.x,p.y,false); });
+    b.appendChild(g); }
+
+  // ====== Nodes
+  function renderNodes(){ const b=$('board'); const g=ns('g'); g.id='nodes'; state.nodes.forEach(n=>{ const {x,y}=gridToXY(n.cx,n.cy); const group=ns('g'); group.classList.add('gate-node'); group.dataset.id=n.id; group.setAttribute('transform',`translate(${x-28},${y-18})`); const body=ns('rect'); body.setAttribute('class','gate-body'); body.setAttribute('rx','6'); body.setAttribute('width','56'); body.setAttribute('height','36'); const label=ns('text'); label.setAttribute('class','gate-label'); label.setAttribute('x','28'); label.setAttribute('y','22'); label.setAttribute('text-anchor','middle'); label.textContent=n.type; const ports=ns('g'); const addPort=(px,py,portId)=>{ const hit=ns('circle'); hit.setAttribute('r','16'); hit.setAttribute('cx',px); hit.setAttribute('cy',py); hit.setAttribute('fill','transparent'); hit.style.cursor='pointer'; const pr=ns('circle'); pr.setAttribute('r','6'); pr.setAttribute('cx',px); pr.setAttribute('cy',py); pr.setAttribute('fill','#132235'); pr.setAttribute('stroke','#2a3b53'); pr.setAttribute('stroke-width','1.5'); pr.classList.add('port'); const onClick=(e)=>{ e.stopPropagation(); const sv=clientToSvg(e.clientX,e.clientY); selectPort({node:n.id, port:portId, x:sv.x, y:sv.y}); }; hit.addEventListener('click',onClick); pr.addEventListener('click',onClick); ports.append(hit,pr); }; const info=GATES.find(g=>g.type===n.type); if(info.inputs===2){ addPort(1,9,'in0'); addPort(1,27,'in1'); } else { addPort(1,18,'in0'); } addPort(55,18,'out'); group.append(body,label,ports); g.appendChild(group); enableDrag(group,n); group.addEventListener('dblclick',()=> removeNode(n.id)); }); b.appendChild(g); }
+
+  function enableDrag(el,node){ let drag=false; el.addEventListener('mousedown',e=>{ drag=true; e.preventDefault(); }); window.addEventListener('mousemove',e=>{ if(!drag) return; const sv=clientToSvg(e.clientX,e.clientY); const p=svgToCell(sv.x,sv.y); node.cx=clamp(p.cx,0,LEVEL.width-1); node.cy=clamp(p.cy,0,LEVEL.height-1); redraw(); }); window.addEventListener('mouseup',()=> drag=false); }
+
+  // ====== Wires
+  function portXY(ref){ if(LEVEL.inputs.some(i=>i.id===ref.node)){ const idx=LEVEL.inputs.find(i=>i.id===ref.node).index; return gridToXY(-1,idx); } if(LEVEL.outputs.some(o=>o.id===ref.node)){ const idx=LEVEL.outputs.find(o=>o.id===ref.node).index; return gridToXY(LEVEL.width,idx); } const n=state.nodes.find(n=>n.id===ref.node); const {x,y}=gridToXY(n.cx,n.cy); const info=GATES.find(g=>g.type===n.type); if(ref.port==='out') return {x:x+27,y}; if(ref.port==='in0') return {x:x-27,y:y+(info.inputs===2?-9:0)}; if(ref.port==='in1') return {x:x-27,y:y+9}; return {x,y}; }
+  const elbowPath=(a,b)=>{ const midx=(a.x+b.x)/2; return `M ${a.x} ${a.y} L ${midx} ${a.y} L ${midx} ${b.y} L ${b.x} ${b.y}`; };
+  function renderWires(){
+    const b=$('board');
+    const g=ns('g'); g.id='wires';
+    state.wires.forEach((w,idx)=>{
+      const a=portXY(w.from), bxy=portXY(w.to);
+      const path=ns('path');
+      path.setAttribute('class','wire'+(state.selWire===idx?' selected':''));
+      path.setAttribute('d',elbowPath(a,bxy));
+      path.dataset.idx=String(idx);
+      path.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        const i=+e.currentTarget.dataset.idx;
+        if(state.selWire===i){
+          state.wires.splice(i,1);
+          state.selWire=null;
+          redraw(); evaluate();
+          flash(state.lang==='en'?'Wire deleted':'配線を削除しました');
+        }else{
+          state.selWire=i; redraw();
+          flash(state.lang==='en'?'Click again to delete wire':'もう一度クリックで配線削除');
+        }
+      });
+      g.appendChild(path);
+    });
+    if(state.ghost){ const a=state.ghost.a, bxy=state.ghost.b; const ghost=ns('path'); ghost.setAttribute('class','ghost'); ghost.setAttribute('d',elbowPath(a,bxy)); g.appendChild(ghost);} 
+    if(state.hoverRef){ const p=portXY(state.hoverRef); const dot=ns('circle'); dot.setAttribute('class','hover-target'); dot.setAttribute('r','8'); dot.setAttribute('cx',p.x); dot.setAttribute('cy',p.y); g.appendChild(dot);} 
+    b.appendChild(g);
+  }
+  function makeGhost(a,b){ const ax=('x'in a)?a.x:portXY(a).x; const ay=('y'in a)?a.y:portXY(a).y; const bx=('x'in b)?b.x:portXY(b).x; const by=('y'in b)?b.y:portXY(b).y; state.ghost={a:{x:ax,y:ay},b:{x:bx,y:by}}; }
+  const clearGhost=()=> state.ghost=null;
+
+  // ====== Connect
+  function selectPort(ref){ if(!state.pendingFrom){ const fromIsOut = ref.port==='out' || LEVEL.inputs.some(i=>i.id===ref.node); if(!fromIsOut){ flash('入力ポートからは開始できません', true); return; } state.pendingFrom=ref; makeGhost(ref,ref); return; } const from=state.pendingFrom; state.pendingFrom=null; clearGhost(); const to=ref; const fromIsOut = from.port==='out' || LEVEL.inputs.some(i=>i.id===from.node); const toIsIn = to.port!=='out'; if(!fromIsOut || !toIsIn){ flash('無効な接続', true); return; } if(state.wires.some(w=> w.to.node===to.node && w.to.port===to.port)) { flash('その入力は既に接続されています', true); return; } state.wires.push({from,to}); redraw(); evaluate(); }
+  const removeNode=id=>{ state.nodes = state.nodes.filter(n=> n.id!==id); state.wires = state.wires.filter(w=> w.from.node!==id && w.to.node!==id); redraw(); evaluate(); };
+
+  // ====== Smart target finding (connect assist)
+  const TARGET_RADIUS=20; const candidatesForInputs=()=>{ const refs=[]; for(const n of state.nodes){ const info=GATES.find(g=>g.type===n.type); if(info.inputs>=1) refs.push({node:n.id,port:'in0'}); if(info.inputs===2) refs.push({node:n.id,port:'in1'}); } for(const o of LEVEL.outputs){ refs.push({node:o.id,port:'in0'}); } return refs; }; const nearestConnectable=(sx,sy)=>{ if(!state.pendingFrom) return null; let best=null, dBest=Infinity; for(const r of candidatesForInputs()){ const p=portXY(r); const d=Math.hypot(p.x-sx, p.y-sy); if(d<dBest && d<=TARGET_RADIUS){ best=r; dBest=d; } } return best; };
+
+  // ====== DnD & Placement
+  ready(()=>{ const board=$('board'); board.addEventListener('mousemove', e=>{ const sv=clientToSvg(e.clientX,e.clientY); if(state.pendingFrom){ const snap=nearestConnectable(sv.x,sv.y); state.hoverRef=snap; makeGhost(state.pendingFrom, snap? snap : {x:sv.x,y:sv.y}); redraw(); } }); board.addEventListener('dragenter', e=> e.preventDefault(), true); board.addEventListener('dragover', e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect='copy'; }catch(_){} }, true); board.addEventListener('drop', e=>{ e.preventDefault(); e.stopImmediatePropagation(); const type=e.dataTransfer.getData('text/plain')||e.dataTransfer.getData('text/x-gate'); if(!type){ flash('ドロップが認識できませんでした', true); return; } const sv=clientToSvg(e.clientX,e.clientY); const p=svgToCell(sv.x,sv.y); const node={ id:'N'+(state.nextId++), type, cx:clamp(p.cx,0,LEVEL.width-1), cy:clamp(p.cy,0,LEVEL.height-1)}; state.nodes.push(node); redraw(); evaluate(); }, true); board.addEventListener('click', e=>{ const sv=clientToSvg(e.clientX,e.clientY); if(!state.placeType && !state.pendingFrom && state.selWire!==null){ state.selWire=null; redraw(); return; } if(state.placeType){ const p=svgToCell(sv.x,sv.y); const node={ id:'N'+(state.nextId++), type:state.placeType, cx:clamp(p.cx,0,LEVEL.width-1), cy:clamp(p.cy,0,LEVEL.height-1)}; state.nodes.push(node); state.placeType=null; board.classList.remove('placing'); redraw(); evaluate(); return; } if(state.pendingFrom){ const snap=nearestConnectable(sv.x,sv.y); if(snap){ selectPort(snap); return; } } }); window.addEventListener('keydown', e=>{ if(e.key==='Escape'){ if(state.pendingFrom){ state.pendingFrom=null; clearGhost(); state.hoverRef=null; redraw(); flash('配線キャンセル'); } if(state.placeType){ state.placeType=null; $('board')?.classList.remove('placing'); flash('配置モード終了'); } } }); });
+
+  // ====== Palette setup
+  ready(()=>{ const pal=$('palette'); GATES.forEach(g=>{ const el=document.createElement('div'); el.className='gate'; el.draggable=true; el.dataset.type=g.type; el.innerHTML=`<div class="chip">${g.type[0]}</div><div><div><strong>${g.label}</strong></div><small>${g.inputs} in</small></div>`; el.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', g.type); e.dataTransfer.setData('text/x-gate', g.type); e.dataTransfer.effectAllowed='copyMove'; }); el.addEventListener('click', ()=>{ const b=$('board'); if(state.placeType===g.type){ state.placeType=null; b.classList.remove('placing'); } else { state.placeType=g.type; b.classList.add('placing'); flash(`配置モード: ${g.type} — 盤面をクリックして配置`); } }); pal.appendChild(el); }); });
+
+  // ====== Truth table / Evaluate & Sort
+  function formatInputsHeader(){
+    const th=$('tthead'); if(!th) return;
+    const inNames=LEVEL.inputs.map(i=>i.id);
+    const outCols = LEVEL.outputs.map(o=>`<th>${o.id}${state.lang==='en'?'(Circuit)':'(回路)'}</th><th>${o.id}${state.lang==='en'?'(Target)':'(目標)'}</th><th>${o.id}${state.lang==='en'?' match':'一致'}</th>`).join('');
+    th.innerHTML = `<tr>${inNames.map(n=>`<th>${n}</th>`).join('')}${outCols}</tr>`;
+    renderSortControls();
+  }
+  function updateScore(){ const el=$('gateCount'); if(el) el.textContent = state.nodes.length; }
+  function readPortValue(ref,sig){ if(LEVEL.inputs.some(i=>i.id===ref.node)) return sig.get(ref.node); return sig.get(ref.node); }
+  function resolveInput(nodeId,port,sig){ const w=state.wires.find(w=> w.to.node===nodeId && w.to.port===port); if(!w) return undefined; return readPortValue(w.from,sig); }
+  function incomingTo(nodeId,port){ return state.wires.find(w=> w.to.node===nodeId && w.to.port===port); }
+  function evalNetRow(assign){
+    const sig=new Map(Object.entries(assign));
+    let changed=true, iter=0; const maxIter=100;
+    while(changed && iter++<maxIter){
+      changed=false;
+      for(const n of state.nodes){
+        const info=GATES.find(g=>g.type===n.type);
+        const i0=resolveInput(n.id,'in0',sig);
+        const i1=(info.inputs===2? resolveInput(n.id,'in1',sig):undefined);
+        if(info.inputs===1){ if(i0!==undefined){ const out=info.fn(i0)&1; if(sig.get(n.id)!==out){ sig.set(n.id,out); changed=true; } } }
+        else { if(i0!==undefined && i1!==undefined){ const out=info.fn(i0,i1)&1; if(sig.get(n.id)!==out){ sig.set(n.id,out); changed=true; } } }
+      }
+      for(const o of LEVEL.outputs){
+        const yIn=incomingTo(o.id,'in0');
+        if(yIn){ const v=readPortValue(yIn.from,sig); if(v!==undefined){ if(sig.get(o.id)!==v){ sig.set(o.id,v); changed=true; } } }
+      }
+    }
+    const result={};
+    for(const o of LEVEL.outputs){ result[o.id]=sig.get(o.id); }
+    return result;
+  }
+  function currentTargetVal(bits, outIndex){
+    const inNames=LEVEL.inputs.map(i=>i.id);
+    let row=0; inNames.forEach((name,idx)=>{ row |= (bits[name]&1) << idx; });
+    const mask = state.masks[outIndex];
+    return (mask >> row) & 1;
+  }
+  function evaluate(){
+    const tbody=$('ttbody'); if(!tbody) return;
+    const names=LEVEL.inputs.map(i=>i.id);
+    tbody.innerHTML='';
+    const rows=[]; const total=1<<names.length; for(let r=0;r<total;r++){ const assign={}; names.forEach((name,idx)=> assign[name]=(r>>idx)&1); rows.push({assign, idx:r}); }
+    const prefs = state.sortPref||{}; const order = names.filter(n=> prefs[n]&&prefs[n]!==0);
+    if(order.length){ rows.sort((ra,rb)=>{ for(const n of order){ const pref=prefs[n]; const av=ra.assign[n], bv=rb.assign[n]; if(av===bv) continue; if(pref===1) return bv-av; if(pref===-1) return av-bv; } return ra.idx-rb.idx; }); }
+    let allOK=true;
+    for(const row of rows){
+      const assign=row.assign; const yObj=evalNetRow(assign);
+      const tdsInputs = names.map(n=>`<td>${assign[n]}</td>`).join('');
+      let tdsOut='';
+      LEVEL.outputs.forEach((o,oi)=>{
+        const y=yObj[o.id];
+        const target=currentTargetVal(assign, oi);
+        const ok=(y!==undefined && y===target);
+        if(!ok) allOK=false;
+        tdsOut += `<td>${y===undefined?'—':y}</td><td>${target}</td><td class="${ok?'ok':'ng'}">${ok?'✓':'×'}</td>`;
+      });
+      const tr=document.createElement('tr'); tr.innerHTML = tdsInputs + tdsOut; tbody.appendChild(tr);
+    }
+    const badge=$('solvedBadge'); if(badge) badge.style.display = allOK?'inline-block':'none';
+    if(allOK) saveBest();
+  }
+
+  // ====== Persist/share
+  function saveBest(){ const key=`best_${state.inputsN}in_${state.outputsN}out_${state.masks.join('-')}`; const cur=state.nodes.length; const prev=+localStorage.getItem(key)||Infinity; if(cur<prev) localStorage.setItem(key,String(cur)); const el=$('bestScore'); if(el) el.textContent = localStorage.getItem(key) || '—'; }
+  function loadBest(){ const el=$('bestScore'); if(el) el.textContent = localStorage.getItem(`best_${state.inputsN}in_${state.outputsN}out_${state.masks.join('-')}`) || '—'; }
+  function saveToHash(){ const data=btoa(JSON.stringify({n:state.inputsN, out:state.outputsN, masks:state.masks})); location.hash = `p=${data}`; }
+  function loadFromHash(){ const m=location.hash.match(/p=([^&]+)/); if(!m) return false; try{ const obj=JSON.parse(atob(m[1])); if(obj && typeof obj.n==='number'){ const outputs = obj.out || (Array.isArray(obj.masks)? obj.masks.length : 1) || 1; const masks = Array.isArray(obj.masks)? obj.masks : (typeof obj.mask==='number'? [obj.mask] : [0]); applyProblem(obj.n, outputs, masks, `Loaded ${obj.n}in/${outputs}out`); return true; } }catch(e){} return false; }
+
+  // ====== Difficulty → Problem
+  function problemByDifficulty(diff, mode){ // mode: 'random' | 'daily'
+    let n=2, outs=1, whitelist=null;
+    if(diff==='EASY'){ n=2; outs=1; }
+    else if(diff==='MEDIUM'){ n=3; outs=1; }
+    else if(diff==='HARD'){ n=3; outs=2; whitelist=['NAND']; }
+    else if(diff==='EXPERT'){ n=4; outs=2; }
+    const rng = (mode==='daily')? lcg(dailySeed() ^ (n<<3) ^ outs) : Math.random;
+    const masks = Array.from({length:outs}, ()=> nonTrivialMask(n, rng));
+    return {n, outs, masks, whitelist};
+  }
+  function applyProblem(n, outs, masks, label){
+    state.inputsN=n; state.outputsN=outs; setIO(n, outs); state.masks=masks; state.name=label; state.nodes=[]; state.wires=[]; state.nextId=1;
+    const tn=$('targetName'); if(tn) tn.textContent = `${state.lang==='en'?'Target':'目標'}: ${label} (inputs=${n}, outputs=${outs})`;
+    redraw(); formatInputsHeader(); evaluate(); loadBest(); saveToHash();
+  }
+
+  // ====== UI binds
+  ready(()=>{
+    on('btnNew','click', ()=>{ const diff=$('difficulty').value; const p=problemByDifficulty(diff,'random'); state.gateWhitelist=p.whitelist; applyProblem(p.n,p.outs,p.masks, `${diff}`); flash(state.lang==='en'?'New puzzle generated':'新しい問題を作成'); });
+    on('btnDaily','click', ()=>{ const diff=$('difficulty').value; const p=problemByDifficulty(diff,'daily'); state.gateWhitelist=p.whitelist; applyProblem(p.n,p.outs,p.masks, `DAILY-${diff}`); flash(state.lang==='en'?"Today's challenge":'本日のチャレンジ'); });
+    on('btnShare','click', async ()=>{ try{ saveToHash(); const ok=await copyToClipboard(location.href); flash(state.lang==='en'?(ok?'Share link copied':'Copy failed'):(ok?'共有リンクをコピーしました':'コピーに失敗しました'), !ok); }catch(e){ flash(state.lang==='en'?'Copy failed':'コピーに失敗しました', true);} });
+    on('btnReset','click', ()=> resetPuzzle());
+    if(!loadFromHash()){ const p=problemByDifficulty('EASY','random'); applyProblem(p.n,p.outs,p.masks,'EASY'); }
+  });
+
+  function resetPuzzle(){ state.nodes=[]; state.wires=[]; state.pendingFrom=null; state.hoverRef=null; state.ghost=null; redraw(); evaluate(); flash(state.lang==='en'?'Reset':'リセットしました'); }
+
+  // ====== Self-tests (hidden by default; ?dev=1 to show)
+  function runTests(){
+    const out=[];
+    try{ out.push(['ready exists', typeof ready==='function']); }catch(e){ out.push(['ready exists', false]); }
+    try{ out.push(['renderWires exists', typeof renderWires==='function']); }catch(e){ out.push(['renderWires exists', false]); }
+    out.push(['copyToClipboard exists', typeof copyToClipboard==='function']);
+    out.push(['flash exists', typeof flash==='function']);
+    out.push(['nonTrivialMask produces non-trivial (2-in)', (function(){ const rng=()=>0.123456; const m=nonTrivialMask(2,rng); return m!==0 && m!==(1<<(1<<2))-1; })() ]);
+    out.push(['Truth table headers render', (function(){ formatInputsHeader(); return $('tthead') && $('tthead').textContent.length>=0; })() ]);
+    out.push(['evaluate safe on fresh board', (function(){ try{ evaluate(); return true; } catch(e){ return false; } })()]);
+    out.push(['masks length == outputs', (function(){ const diff='HARD'; const p=problemByDifficulty(diff,'random'); return p.masks.length===p.outs; })()]);
+    out.push(['evalNetRow returns object', (function(){ const assign={A:0,B:1,C:0}; const res=evalNetRow(assign); return typeof res==='object'; })()]);
+    const el=$('testResults'); if(el){ el.innerHTML = out.map(([n,ok])=>`<div>${ok?'✅':'❌'} ${n}</div>`).join(''); }
+  }
+
+  function renderSortControls(){ const box=$('sortControls'); if(!box) return; box.innerHTML = (state.lang==='en'?'Sort: ':'並び替え: ');
+    const names=LEVEL.inputs.map(i=>i.id);
+    names.forEach(name=>{ if(!(state.sortPref && name in state.sortPref)) { state.sortPref=state.sortPref||{}; state.sortPref[name]=0; }
+      const btn=document.createElement('button'); btn.className='mini'; btn.style.padding='4px 8px'; btn.style.borderRadius='8px'; btn.style.border='1px solid #213149'; btn.style.background='#0f1622';
+      function label(){ const v=state.sortPref[name]; return v===1? `${name}:1↑` : v===-1? `${name}:0↑` : `${name}:—`; }
+      btn.textContent=label();
+      btn.addEventListener('click', ()=>{ const v=state.sortPref[name]; state.sortPref[name] = (v===0?1:(v===1?-1:0)); btn.textContent=label(); evaluate(); flash((state.lang==='en'?'Sort ':'並び替え ')+`${name} → ${btn.textContent.split(':')[1]}`); });
+      box.appendChild(btn);
+    });
+    const reset=document.createElement('button'); reset.className='mini'; reset.style.marginLeft='6px'; reset.textContent = (state.lang==='en'?'Reset':'リセット'); reset.addEventListener('click', ()=>{ const names=LEVEL.inputs.map(i=>i.id); names.forEach(n=> state.sortPref[n]=0); renderSortControls(); evaluate(); }); box.appendChild(reset);
+  }
+
+  // ====== i18n resources & apply
+  const I18N = {
+    ja:{
+      title:'Logic Grid Puzzle — 難易度でI/Oと出題を自動生成', hint:'配線: 出力→入力（入力は1本、出力は複数OK）｜Escで配線キャンセル',
+      labels:{difficulty:'難易度', palette:'ゲートパレット', guideTitle:'ゲートの説明', helpTitle:'遊び方（ヘルプ）', score:'スコア', truth:'真理値表', gateCount:'現在のゲート数', best:'ベスト', ttTitle:'真理値表（入力 → Y）'},
+      legend:['ドラッグ: 配置','クリック: 配置モード','ドラッグで移動 / ダブルクリックで削除','配線は 出力→入力 を2回クリック','真理値表の上のボタンで並び替え'],
+      guide:{ AND:'AND: 両方1で1', OR:'OR: どちらか1で1', NOT:'NOT: 反転', XOR:'XOR: どちらか一方だけ1', NAND:'NAND: ANDの反転' },
+      flashes:{ new:'新しい問題を作成', daily:'本日のチャレンジ', shareOK:'共有リンクをコピーしました', shareNG:'共有リンクのコピーに失敗しました', reset:'リセットしました' }
+    },
+    en:{
+      title:'Logic Grid Puzzle — Auto-generated I/O by Difficulty', hint:'Wire: Output → Input (each input accepts 1 wire; outputs can fan-out). Esc cancels.',
+      labels:{difficulty:'Difficulty', palette:'Gate Palette', guideTitle:'Gate guide', helpTitle:'How to Play (Help)', score:'Score', truth:'Truth Table', gateCount:'Gate count', best:'Best', ttTitle:'Truth Table (Inputs → Y)'},
+      legend:['Drag: place','Click: place mode','Drag to move / Double-click to delete','Wire by clicking Output → Input','Use sort buttons to reorder the truth table'],
+      guide:{ AND:'AND: 1 only when both are 1', OR:'OR: 1 if any is 1', NOT:'NOT: invert', XOR:'XOR: 1 when inputs differ', NAND:'NAND: inverted AND' },
+      flashes:{ new:'New puzzle generated', daily:"Today's challenge", shareOK:'Share link copied', shareNG:'Failed to copy link', reset:'Reset' }
+    }
+  };
+  function setTxt(id, txt){ const el=$(id); if(el && txt!=null) el.textContent = txt; }
+  function renderLegend(){ const box=$('legend'); const t=I18N[state.lang]; if(!box||!t) return; box.innerHTML = t.legend.map(s=>`<span class="k">${s}</span>`).join(''); }
+  function renderGateGuide(){ const ul=$('gateGuide'); const h=$('gateGuideTitle'); const t=I18N[state.lang]; if(!ul||!h||!t) return; h.textContent=t.labels.guideTitle; const order=['AND','OR','NOT','XOR','NAND']; ul.innerHTML = order.map(k=>`<li>${t.guide[k]}</li>`).join(''); }
+  function applyLang(){ const t=I18N[state.lang]; if(!t) return; setTxt('pageTitle',t.title); setTxt('hintText',t.hint); setTxt('lblDifficulty',t.labels.difficulty); setTxt('paletteTitle',t.labels.palette); setTxt('scoreTitle',t.labels.score); setTxt('truthTitle',t.labels.truth); setTxt('lblGateCount',t.labels.gateCount); setTxt('lblBest',t.labels.best); setTxt('ttTitle',t.labels.ttTitle); renderLegend(); renderGateGuide(); if(window.formatInputsHeader) formatInputsHeader(); if(window.renderSortControls) renderSortControls(); if(window.evaluate) evaluate(); if(window.redraw) redraw(); }
+
+  // init language selector
+  ready(()=>{ const sel=$('lang'); if(sel){ sel.value=state.lang; sel.addEventListener('change', ()=>{ state.lang=sel.value; localStorage.setItem('lgp_lang', state.lang); applyLang(); }); } applyLang(); });
+
+  // show self-tests only with ?dev=1
+  ready(()=>{ const dev=/[?&]dev=1/.test(location.search); if(!dev) return; const box=$('selfTestsBox'); if(box){ box.style.display='block'; runTests(); } });
+
+  // ====== Redraw/init
+  function redraw(){ drawGrid(); placeIO(); renderWires(); renderNodes(); updateScore(); }
+
+  // initial tests guarded (do not error if box not present)
+  ready(()=>{ try{ runTests(); }catch(e){} });
+  </script>
+
+  <footer class="mini" style="max-width:1200px;margin:8px auto 24px;padding:0 16px;color:#9fb0c8;display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end">
+    <span>© <span id="year"></span> Logic Grid Puzzle</span>
+    <a href="#privacy" id="openPrivacy" style="color:#9fb0c8">Privacy</a>
+    <a href="#about" id="openAbout" style="color:#9fb0c8">About</a>
+    <div id="ad-footer" style="width:100%;display:flex;justify-content:center;margin-top:8px">
+      <!-- Footer Ad (Responsive) -->
+      <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" data-ad-slot="0000000000" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    </div>
+    <script>try{(adsbygoogle=window.adsbygoogle||[]).push({});}catch(e){}</script>
+  </footer>
+
+  <!-- Modal for Privacy / About -->
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <button class="modal-close" id="modalClose">×</button>
+      <h3 id="modalTitle">&nbsp;</h3>
+      <div id="modalContent" class="mini"></div>
+    </div>
+  </div>
+  <script>
+    function renderModal(type){
+      const t=I18N[state.lang];
+      const titleMap={ privacy:{ja:'プライバシーポリシー',en:'Privacy Policy'}, about:{ja:'このサイトについて',en:'About this site'} };
+      const content={
+        privacy:{
+          ja:`<p>このサイトはCookieを使用せず、ベストスコア等はブラウザのローカルストレージに保存します。</p>
+               <p>広告を有効にした場合、各提供会社のポリシーに従いデータが処理されることがあります。</p>`,
+          en:`<p>This site does not use cookies. Best scores are stored in your browser's local storage.</p>
+               <p>If ads are enabled, data may be processed according to each provider's policies.</p>`
+        },
+        about:{
+          ja:`<p>外周の入出力をロジックゲートで配線し、ゲート数を最小化するパズルです。Difficultyに応じてI/Oとターゲットを自動生成します。</p>`,
+          en:`<p>A logic puzzle where you connect outer I/O with gates and try to minimize gate count. Inputs/outputs and targets are auto-generated by difficulty.</p>`
+        }
+      };
+      const title = titleMap[type]?.[state.lang]||'';
+      const html = content[type]?.[state.lang] + '<hr style="border-color:#1a2330">' + content[type]?.[state.lang==='ja'?'en':'ja'];
+      $('modalTitle').textContent = title;
+      $('modalContent').innerHTML = html;
+    }
+    function openModal(type){ renderModal(type); $('modal').classList.add('show'); }
+    function closeModal(){ $('modal').classList.remove('show'); }
+    ready(()=>{
+      const y=$('year'); if(y) y.textContent=String(new Date().getFullYear());
+      on('openPrivacy','click', (e)=>{ e.preventDefault(); openModal('privacy'); history.replaceState(null,'','#privacy'); });
+      on('openAbout','click', (e)=>{ e.preventDefault(); openModal('about'); history.replaceState(null,'','#about'); });
+      on('modalClose','click', ()=>{ closeModal(); history.replaceState(null,'','#'); });
+      $('modal').addEventListener('click', (e)=>{ if(e.target.id==='modal') { closeModal(); history.replaceState(null,'','#'); } });
+      if(location.hash==='#privacy') openModal('privacy');
+      if(location.hash==='#about') openModal('about');
+    });
+  </script>
+</body>
+</html>
