@@ -229,6 +229,7 @@
     { type:'NOT', inputs:1, fn:(a)=> a^1, label:'NOT' },
     { type:'XOR', inputs:2, fn:(a,b)=> a ^ b, label:'XOR' },
     { type:'NAND', inputs:2, fn:(a,b)=> (a & b)^1, label:'NAND' },
+    { type:'XNOR', inputs:2, fn:(a,b)=> (a ^ b) ^ 1, label:'XNOR' },
   ];
 
   // ====== Level (dynamic by difficulty)
@@ -477,14 +478,14 @@
       title:'Logic Grid Puzzle — 難易度でI/Oと出題を自動生成', hint:'配線: 出力→入力（入力は1本、出力は複数OK）｜Escで配線キャンセル',
       labels:{difficulty:'難易度', palette:'ゲートパレット', guideTitle:'ゲートの説明', helpTitle:'遊び方（ヘルプ）', score:'スコア', truth:'真理値表', gateCount:'現在のゲート数', best:'ベスト', ttTitle:'真理値表（入力 → Y）'},
       legend:['ドラッグ: 配置','クリック: 配置モード','ドラッグで移動 / ダブルクリックで削除','配線は 出力→入力 を2回クリック','真理値表の上のボタンで並び替え'],
-      guide:{ AND:'AND: 両方1で1', OR:'OR: どちらか1で1', NOT:'NOT: 反転', XOR:'XOR: どちらか一方だけ1', NAND:'NAND: ANDの反転' },
+      guide:{ AND:'AND: 両方1で1（Y = A·B）', OR:'OR: どちらか1で1 (Y = A + B）', NOT:'NOT: 反転（Y = ¬A）', XOR:'XOR: 入力が異なるとき,どちらか一方が1の時に1（Y = A ⊕ B）', NAND:'NAND: ANDの反転 (Y = ¬(A·B))' , XNOR:'XNOR: 入力が同じときに1（Y = ¬(A ⊕ B）'},
       flashes:{ new:'新しい問題を作成', daily:'本日のチャレンジ', shareOK:'共有リンクをコピーしました', shareNG:'共有リンクのコピーに失敗しました', reset:'リセットしました' }
     },
     en:{
       title:'Logic Grid Puzzle — Auto-generated I/O by Difficulty', hint:'Wire: Output → Input (each input accepts 1 wire; outputs can fan-out). Esc cancels.',
       labels:{difficulty:'Difficulty', palette:'Gate Palette', guideTitle:'Gate guide', helpTitle:'How to Play (Help)', score:'Score', truth:'Truth Table', gateCount:'Gate count', best:'Best', ttTitle:'Truth Table (Inputs → Y)'},
       legend:['Drag: place','Click: place mode','Drag to move / Double-click to delete','Wire by clicking Output → Input','Use sort buttons to reorder the truth table'],
-      guide:{ AND:'AND: 1 only when both are 1', OR:'OR: 1 if any is 1', NOT:'NOT: invert', XOR:'XOR: 1 when inputs differ', NAND:'NAND: inverted AND' },
+      guide:{ AND:'AND: 1 only when both are 1', OR:'OR: 1 if any is 1', NOT:'NOT: invert', XOR:'XOR: 1 when inputs differ', NAND:'NAND: inverted AND', XNOR:'XNOR:' },
       flashes:{ new:'New puzzle generated', daily:"Today's challenge", shareOK:'Share link copied', shareNG:'Failed to copy link', reset:'Reset' }
     }
   };
